@@ -1,4 +1,4 @@
-#!
+#!/bin/bash
 
 #Variables
 MONGO_FILE=setup/mongodb-org.repo
