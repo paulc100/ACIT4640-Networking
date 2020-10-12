@@ -1,32 +1,24 @@
 #!/bin/bash
 
 #Variables
-MONGO_FILE=setup/mongodb-org.repo
-NGINX_FILE=setup/nginx.conf
-DATABASE_FILE=setup/database.js
-SELINUX_FILE=setup/config
-SERVICE_FILE=setup/todoapp.service
+MONGO_FILE=/home/admin/setup/mongodb-org.repo
+NGINX_FILE=/home/admin/setup/nginx.conf
+DATABASE_FILE=/home/admin/setup/database.js
+SELINUX_FILE=/home/admin/setup/config
+SERVICE_FILE=/home/admin/setup/todoapp.service
 
 GIT_APP=https://github.com/timoguic/ACIT4640-todo-app
 
 APP_DIR=/home/todoapp/app
 APP_USR_DIR=/home/todoapp
 
-create_user () {
-    #Todoapp User
-    sudo useradd todoapp
-    echo "password" | sudo passwd --stdin todoapp
-}
-
 install_packages () {
     #Installing Packages
-    sudo dnf update -y
     sudo dnf install git -y
     sudo dnf install npm -y
     sudo dnf install nodejs -y
 
     sudo yum install nginx -y
-    sudo systemctl start nginx
     sudo systemctl enable nginx
 }
 
@@ -34,18 +26,7 @@ setup_vm () {
     #MongoDB
     sudo mv ${MONGO_FILE} /etc/yum.repos.d/
     sudo dnf install -y mongodb-org
-    sudo systemctl start mongod
     sudo systemctl enable mongod
-
-    #Disable SE Linux
-    sudo setenforce 0
-    sudo mv -f ${SELINUX_FILE} /etc/selinux/
-
-    #Firewall Config
-    sudo firewall-cmd --zone=public --add-service=http
-    sudo firewall-cmd --zone=public --add-service=https
-    sudo firewall-cmd --zone=public --add-port=80/tcp
-    sudo firewall-cmd --runtime-to-permanent
 
     #Nginx
     sudo mv -f ${NGINX_FILE} /etc/nginx/
@@ -64,12 +45,10 @@ create_app () {
     #Systemd
     sudo mv ${SERVICE_FILE} /etc/systemd/system
     sudo systemctl daemon-reload
-    sudo systemctl start todoapp
     sudo systemctl enable todoapp
     sudo systemctl status todoapp
 }
 
-create_user
 install_packages
 setup_vm
 create_app
