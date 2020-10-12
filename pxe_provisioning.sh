@@ -61,7 +61,7 @@ else
  
     #Change settings of virtual machine
     vbmg modifyvm "TODO4640A" \
-        --memory 2048 \
+        --memory 4000 \
         --nic1 natnetwork --nat-network1 NET_4640 --cableconnected1 on \
         --boot1 disk --boot2 net --boot3 none --boot4 none \
         --graphicscontroller vmsvga
