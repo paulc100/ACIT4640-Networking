@@ -1,0 +1,51 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+	config.vm.box = "basebox_4640"
+	config.ssh.username = "admin"
+	config.ssh.private_key_path = "files/acit_admin_id_rsa"
+	
+	config.vm.network "forwarded_port", guest: 80, host: 9088
+	
+	config.vm.synced_folder ".", "/vagrant", disabled: true
+	
+	config.vm.provider "virtualbox" do |vb|
+		vb.gui = false
+		vb.memory = "2048"
+	end
+
+	config.vm.provision "file", source: "files/nginx.conf", destination: "/tmp/nginx.conf"
+	config.vm.provision "file", source: "files/config", destination: "/tmp/config"
+	config.vm.provision "file", source: "files/todoapp.service", destination: "/tmp/todoapp.service"
+	config.vm.provision "file", source: "files/mongodb-org.repo", destination: "/tmp/mongodb-org.repo"
+	config.vm.provision "file", source: "files/database.js", destination: "/tmp/database.js"
+	config.vm.provision "file", source: "files/install_script.sh", destination: "/tmp/install_script.sh"
+	
+	config.vm.provision "shell", inline: <<-SHELL
+		useradd todoapp
+		
+		dnf install -y git nginx
+
+		curl -sL https://rpm.nodesource.com/setup_14.x | sudo bash -
+
+		dnf install -y nodejs
+
+		sudo mv /tmp/nginx.conf /etc/nginx/nginx.conf
+
+		sudo mv /tmp/mongodb-org.repo /etc/yum.repos.d/mongodb-org.repo
+
+		dnf install -y mongodb-org
+
+		sudo -u todoapp bash /tmp/install_script.sh
+
+		sudo mv /tmp/database.js /home/todoapp/app/config/database.js
+
+		sudo mv /tmp/todoapp.service /etc/systemd/system
+
+		sudo systemctl daemon-reload
+		sudo systemctl start nginx
+		sudo systemctl start mongod
+		sudo systemctl start todoapp
+	SHELL
+end
