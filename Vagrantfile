@@ -35,39 +35,6 @@ Vagrant.configure("2") do |config|
       SHELL
     end
 
-    config.vm.define "TODO_APP_4640" do |todoapp|
-      todoapp.vm.provider "virtualbox" do |vb|
-        vb.name = "TODO_APP_4640"
-        vb.memory = 2048
-      end
-      
-      todoapp.vm.hostname = "todoapp.bcit.local"
-      todoapp.vm.network "private_network", ip: "192.168.150.20"
-
-      todoapp.vm.provision "file", source: "files/todoapp.service", destination: "/tmp/todoapp.service"
-      todoapp.vm.provision "file", source: "files/database.js", destination: "/tmp/database.js"
-      todoapp.vm.provision "file", source: "files/install_script.sh", destination: "/tmp/install_script.sh"
-  
-      todoapp.vm.provision "shell", inline: <<-SHELL
-
-        useradd todoapp
-        
-        curl -sL https://rpm.nodesource.com/setup_14.x | sudo bash -
-
-        dnf install -y nodejs
-
-        sudo -u todoapp bash /tmp/install_script.sh
-
-        sudo mv /tmp/database.js /home/todoapp/app/config/database.js
-
-        sudo mv /tmp/todoapp.service /etc/systemd/system
-
-        sudo systemctl daemon-reload
-        sudo systemctl start todoapp
-
-      SHELL
-    end
-
     config.vm.define "TODO_DB_4640" do |tododb|
       tododb.vm.provider "virtualbox" do |vb|
         vb.name = "TODO_DB_4640"
@@ -96,6 +63,40 @@ Vagrant.configure("2") do |config|
         #mongorestore -d acit4640 /ACIT4640
 
         sudo systemctl start mongod
+
+      SHELL
+    end
+
+    config.vm.define "TODO_APP_4640" do |todoapp|
+      todoapp.vm.provider "virtualbox" do |vb|
+        vb.name = "TODO_APP_4640"
+        vb.memory = 2048
+      end
+      
+      todoapp.vm.hostname = "todoapp.bcit.local"
+      todoapp.vm.network "forwarded_port", guest: 80, host: 8080
+      todoapp.vm.network "private_network", ip: "192.168.150.20"
+
+      todoapp.vm.provision "file", source: "files/todoapp.service", destination: "/tmp/todoapp.service"
+      todoapp.vm.provision "file", source: "files/database.js", destination: "/tmp/database.js"
+      todoapp.vm.provision "file", source: "files/install_script.sh", destination: "/tmp/install_script.sh"
+  
+      todoapp.vm.provision "shell", inline: <<-SHELL
+
+        useradd todoapp
+        
+        curl -sL https://rpm.nodesource.com/setup_14.x | sudo bash -
+
+        dnf install -y nodejs
+
+        sudo -u todoapp bash /tmp/install_script.sh
+
+        sudo mv /tmp/database.js /home/todoapp/app/config/database.js
+
+        sudo mv /tmp/todoapp.service /etc/systemd/system
+
+        sudo systemctl daemon-reload
+        sudo systemctl start todoapp
 
       SHELL
     end
