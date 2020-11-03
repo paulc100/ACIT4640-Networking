@@ -20,6 +20,7 @@ Vagrant.configure("2") do |config|
       end
       
       todohttp.vm.hostname = "todohttp.bcit.local"
+      config.vm.network "forwarded_port", guest: 80, host: 8080
       todohttp.vm.network "private_network", ip: "192.168.150.10"
 
       todohttp.vm.provision "file", source: "files/nginx.conf", destination: "/tmp/nginx.conf"
@@ -45,16 +46,19 @@ Vagrant.configure("2") do |config|
       tododb.vm.network "private_network", ip: "192.168.150.30"
 
       tododb.vm.provision "file", source: "files/mongodb-org.repo", destination: "/tmp/mongodb-org.repo"
+      tododb.vm.provision "file", source: "files/mongod.conf", destination: "/tmp/mongod.conf"
       
       tododb.vm.provision "shell", inline: <<-SHELL
 
         sudo mv /tmp/mongodb-org.repo /etc/yum.repos.d/mongodb-org.repo
+        
+        sudo mv /tmp/mongod.conf /etc/mongod.conf
 
         dnf install -y mongodb-org
 
         wget https://student:BCIT2020@acit4640.y.vu/docs/module06/resources/mongodb_ACIT4640.tgz -O /tmp/mongodb_ACIT4640.tgz
 
-        sudo mv /tmp/mongodb_ACIT4640.tgz /mongodb_ACIT4640.tgz
+        sudo mv -f /tmp/mongodb_ACIT4640.tgz /mongodb_ACIT4640.tgz
 
         #yum install -y tar
 
@@ -74,7 +78,6 @@ Vagrant.configure("2") do |config|
       end
       
       todoapp.vm.hostname = "todoapp.bcit.local"
-      todoapp.vm.network "forwarded_port", guest: 80, host: 8080
       todoapp.vm.network "private_network", ip: "192.168.150.20"
 
       todoapp.vm.provision "file", source: "files/todoapp.service", destination: "/tmp/todoapp.service"
@@ -87,6 +90,7 @@ Vagrant.configure("2") do |config|
         
         curl -sL https://rpm.nodesource.com/setup_14.x | sudo bash -
 
+        dnf install -y git
         dnf install -y nodejs
 
         sudo -u todoapp bash /tmp/install_script.sh
