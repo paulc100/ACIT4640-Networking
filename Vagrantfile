@@ -20,14 +20,20 @@ Vagrant.configure("2") do |config|
       end
       
       todohttp.vm.hostname = "todohttp.bcit.local"
-      config.vm.network "forwarded_port", guest: 80, host: 8080
+      todohttp.vm.network "forwarded_port", guest: 80, host: 8888
       todohttp.vm.network "private_network", ip: "192.168.150.10"
 
       todohttp.vm.provision "file", source: "files/nginx.conf", destination: "/tmp/nginx.conf"
+      todohttp.vm.provision "file", source: "files/config", destination: "/tmp/config"
       
       todohttp.vm.provision "shell", inline: <<-SHELL
 
+        sudo firewall-cmd --zone=public --add-port=80/tcp
+        sudo firewall-cmd --runtime-to-permanent
+
         dnf install -y git nginx
+
+        git clone https://github.com/timoguic/ACIT4640-todo-app /var/www/app
 
         sudo mv /tmp/nginx.conf /etc/nginx/nginx.conf
 
@@ -50,23 +56,28 @@ Vagrant.configure("2") do |config|
       
       tododb.vm.provision "shell", inline: <<-SHELL
 
+        sudo firewall-cmd --zone=public --add-port=27017/tcp
+        sudo firewall-cmd --runtime-to-permanent
+
         sudo mv /tmp/mongodb-org.repo /etc/yum.repos.d/mongodb-org.repo
         
         sudo mv /tmp/mongod.conf /etc/mongod.conf
 
         dnf install -y mongodb-org
 
+        export LANG=C
+
         wget https://student:BCIT2020@acit4640.y.vu/docs/module06/resources/mongodb_ACIT4640.tgz -O /tmp/mongodb_ACIT4640.tgz
 
         sudo mv -f /tmp/mongodb_ACIT4640.tgz /mongodb_ACIT4640.tgz
 
-        #yum install -y tar
-
-        #tar -zxf /mongodb_ACIT4640.tgz
-
-        #mongorestore -d acit4640 /ACIT4640
-
         sudo systemctl start mongod
+
+        yum install -y tar
+
+        tar -zxf /mongodb_ACIT4640.tgz
+
+        mongorestore -d acit4640 ./ACIT4640
 
       SHELL
     end
@@ -85,6 +96,9 @@ Vagrant.configure("2") do |config|
       todoapp.vm.provision "file", source: "files/install_script.sh", destination: "/tmp/install_script.sh"
   
       todoapp.vm.provision "shell", inline: <<-SHELL
+
+        sudo firewall-cmd --zone=public --add-port=8080/tcp
+        sudo firewall-cmd --runtime-to-permanent
 
         useradd todoapp
         
