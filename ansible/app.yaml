@@ -22,7 +22,7 @@
     - name: Setup NodeJS repo
       when: download_nodejs_repo.changed
       become: yes
-      shell: bash /tmp/install_node_repo
+      shell: bash /tmp/install_node_repo.sh
     - name: Make sure nodejs and git are installed
       become: yes
       package:
