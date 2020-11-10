@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-    config.vm.box = "basebox_4640"
+    config.vm.box = "4640BOX"
     config.ssh.username = "admin"
     config.ssh.private_key_path = "files/acit_admin_id_rsa"
 
