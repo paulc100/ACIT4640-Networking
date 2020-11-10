@@ -1,0 +1,81 @@
+---
+- hosts: TODO_APP_4640 # VM name
+
+  # Global variables
+  vars:
+    todoapp_user: todoapp
+
+  tasks:
+    # Create todoapp user
+    - name: Make sure todoapp user exists
+      become: yes
+      user:
+        name: "{{ todoapp_user }}"
+
+    # Install packages
+    - name: Provision the nodejs repository
+      become: yes
+      get_url:
+        url: https://rpm.nodesource.com/setup_14.x
+        dest: /tmp/install_node_repo.sh
+      register: download_nodejs_repo
+    - name: Setup NodeJS repo
+      when: download_nodejs_repo.changed
+      become: yes
+      shell: bash /tmp/install_node_repo
+    - name: Make sure nodejs and git are installed
+      become: yes
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - git
+        - nodejs
+
+    # Todoapp creation and configuration
+    - name: Adjust permissions in todo app home folder
+      become: yes
+      become_user: "{{ todoapp_user }}"
+      file:
+        path: /home/{{ todoapp_user }}
+        mode: "0755"
+    - name: Make sure the git repo is up to date
+      become: yes
+      become_user: "{{ todoapp_user }}"
+      git:
+        repo: https://github.com/timoguic/ACIT4640-todo-app
+        dest: /home/{{ todoapp_user }}/app
+        force: yes
+    - name: Template out the service file
+      become: yes
+      template:
+        src: todoapp.j2
+        dest: /etc/systemd/system/todoapp.service
+    - name: Make sure npm install is run
+      become: yes
+      become_user: "{{ todoapp_user }}"
+      shell: npm install
+      args:
+        chdir: /home/{{ todoapp_user }}/app
+    - name: Make sure the db settings are correct in app
+      become: yes
+      become_user: "{{ todoapp_user }}"
+      replace:
+        path: /home/{{ todoapp_user }}/app/config/database.js
+        regexp: "localhost/CHANGEME"
+        replace: "192.168.150.30/acit4640"
+
+    # Final setup
+    - name: Make sure todo service is enabled and started
+      become: yes
+      systemd:
+        name: todoapp
+        state: started
+        enabled: yes
+    - name: Make sure nginx port is open
+      become: yes
+      firewalld:
+        port: 8080/tcp
+        state: enabled
+        immediate: yes
+        permanent: yes

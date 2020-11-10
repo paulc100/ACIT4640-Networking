@@ -1,0 +1,55 @@
+---
+- hosts: TODO_DB_4640 # VM name
+
+  become: yes # Global become
+
+  tasks:
+    # Install packages
+    - name: Provision the repository file for Mongo
+      copy:
+        src: ./files/mongodb-org.repo
+        dest: /etc/yum.repos.d/mongodb-org.repo
+    - name: Make sure Mongo is installed
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - tar
+        - mongodb-org
+
+    # Mongo configurations and start
+    - name: Make sure mongo listens on all intefaces
+      replace:
+        path: /etc/mongod.conf
+        regexp: "bindIp: 127.0.0.1"
+        replace: "bindIp: 0.0.0.0"
+    - name: Make sure mongo is running
+      systemd:
+        name: mongod
+        state: started
+
+    # Import data
+    - name: Download the mongo export
+      become_user: admin
+      get_url:
+        url: https://acit4640.y.vu/docs/module06/resources/mongodb_ACIT4640.tgz
+        dest: /tmp/mongod_export.tgz
+        username: student
+        password: BCIT2020
+    - name: Unpack the mongo export data
+      unarchive:
+        remote_src: yes
+        src: /tmp/mongod_export.tgz
+        dest: /tmp
+      register: unpack_mongo_data
+    - name: Import the mongo data
+      when: unpack_mongo_data.changed
+      shell: mongorestore -d acit4640 /tmp/ACIT4640
+
+    # Final setup
+    - name: Make sure mongo port is open
+      firewalld:
+        port: 27017/tcp
+        state: enabled
+        immediate: yes
+        permanent: yes

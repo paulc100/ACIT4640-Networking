@@ -1,0 +1,38 @@
+---
+- hosts: TODO_HTTP_4640 # VM name
+
+  become: yes # Global become
+
+  tasks:
+    # Install packages
+    - name: Make sure that nginx and git are installed
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - git
+        - nginx
+
+    # Git repo install
+    - name: Make sure the git repo is up to date
+      git:
+        repo: https://github.com/timoguic/ACIT4640-todo-app
+        dest: /var/www/app
+        force: yes
+    - name: Provision nginx.conf
+      copy:
+        src: nginx.conf
+        dest: /etc/nginx/nginx.conf
+
+    # Final setup
+    - name: Make sure nginx is running and enabled
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+    - name: Make sure nginx port is open
+      firewalld:
+        port: 80/tcp
+        state: enabled
+        immediate: yes
+        permanent: yes
