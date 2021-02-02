@@ -1,0 +1,165 @@
+---
+
+# Provision NodeJS Repo for package installation
+- name: Provision the nodejs repository
+  become: yes
+  get_url:
+    url: https://rpm.nodesource.com/setup_14.x
+    dest: /tmp/install_node_repo.sh
+  register: download_nodejs_repo
+- name: Setup NodeJS repo
+  when: download_nodejs_repo.changed
+  become: yes
+  shell: bash /tmp/install_node_repo.sh
+
+# Install all packages
+- name: Install
+  become: yes
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - nginx
+    - firewalld
+    - git
+    - nodejs
+    - mysql-server
+
+# Firewall and Selinux Setup
+- name: Enable/start firewall
+  become: yes
+  shell: |
+    systemctl enable firewalld
+    systemctl start firewalld
+- name: Make sure nginx port is open
+  become: yes
+  firewalld:
+    port: 80/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes
+
+# Selinux off
+- name: SELinux disable
+  become: yes
+  shell: |
+    setenforce 0
+    sed -r -i 's/SELINUX=(enforcing|disabled)/SELINUX=permissive/' /etc/selinux/config
+
+# Provision nginx config
+- name: Provision nginx.conf
+  become: yes
+  copy:
+    src: ./files/nginx.conf
+    dest: /etc/nginx/nginx.conf
+
+# Frontend creation and configuration
+- name: Adjust permissions for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  file:
+    path: "/home/{{ frontend_user }}"
+    mode: "0755"
+- name: Make sure the git repo is up to date for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  git:
+    repo: https://github.com/bezkoder/react-crud-web-api
+    dest: "{{ frontend_app_path }}"
+    force: yes
+
+# Modify frontend DB file
+- name: Make sure the db settings are correct in app
+  become: yes
+  become_user: "{{ frontend_user }}"
+  replace:
+    path: "{{ frontend_app_path }}/src/http-common.js"
+    regexp: "http://localhost:8080/api"
+    replace: "/api"
+
+# Npm install and build
+- name: Make sure npm install is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm install
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+- name: Make sure npm build is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm run-script build
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+# Create backend user
+- name: Make sure user exists
+  become: yes
+  user:
+    name: "{{ backend_user }}"
+
+# Backend creation and configuration
+- name: Adjust permissions for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  file:
+    path: "/home/{{ backend_user }}"
+    mode: "0755"
+- name: Make sure the git repo is up to date for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  git:
+    repo: https://github.com/bezkoder/nodejs-express-sequelize-mysql
+    dest: "{{ backend_app_path }}"
+    force: yes
+
+- name: Make sure npm install is run for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  shell: |
+    npm install
+  args:
+    chdir: "{{ backend_app_path }}"
+
+# Modify backend DB file
+- name: Template out the app DB file
+  become: yes
+  become_user: "{{ backend_user }}"
+  template:
+    src: ./templates/db.config.j2
+    dest: "{{ backend_app_path }}/app/config/db.config.js"
+
+# Finalize application
+
+- name: Template out the backend service file
+  become: yes
+  template:
+    force: yes
+    src: ./templates/backend.j2
+    dest: /etc/systemd/system/backend.service
+
+# DB and user creation
+- name: mysql
+  become: yes
+  shell: |
+    systemctl enable mysqld
+    systemctl start mysqld
+    mysql -u root -e "CREATE DATABASE {{ backend_db_name }};"
+    mysql -u root -e "CREATE USER '{{ backend_db_user }}'@'{{ backend_db_host }}' IDENTIFIED BY '{{ backend_db_password }}';"
+    mysql -u root -e "GRANT ALL PRIVILEGES ON {{ backend_db_name }}.* TO '{{ backend_db_user }}'@'{{ backend_db_host }}';"
+
+# Nginx start
+- name: Make sure nginx is running and enabled
+  become: yes
+  systemd:
+    name: nginx
+    enabled: yes
+    state: restarted
+    
+# Start backend service
+- name: Make sure backend service is enabled and started
+  become: yes
+  systemd:
+    name: backend.service
+    state: restarted
+    enabled: yes

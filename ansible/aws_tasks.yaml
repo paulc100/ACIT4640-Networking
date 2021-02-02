@@ -1,0 +1,122 @@
+---
+
+# Create VPC
+- name: Provision VPC
+  ec2_vpc_net:
+    cidr_block: 10.42.0.0/16
+    region: us-west-2
+    name: "{{ AWS_PREFIX }}_VPC"
+    state: present
+  register: vpc_data
+
+# Create Subnet
+- name: Provision subnet
+  ec2_vpc_subnet:
+    vpc_id: "{{ vpc_data.vpc.id }}"
+    cidr: 10.42.10.0/24
+    region: us-west-2
+    az: us-west-2a
+    state: present
+    tags:
+      Name: "{{ AWS_PREFIX }}_SUBNET"
+  register: subnet_data
+
+# Create Internet gateway
+- name: Provision the Internet gateway
+  ec2_vpc_igw:
+    vpc_id: "{{ vpc_data.vpc.id }}"
+    region: us-west-2
+    state: present
+    tags:
+      Name: "{{ AWS_PREFIX }}_IGW"
+  register: igw_data
+
+# Create Routing Table
+- name: Provision the Routing Table
+  ec2_vpc_route_table:
+    vpc_id: "{{ vpc_data.vpc.id }}"
+    region: us-west-2
+    state: present
+    tags:
+      Name: "{{ AWS_PREFIX }}_RTBL"
+    subnets:
+      - "{{ subnet_data.subnet.id }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ igw_data.gateway_id }}"
+  register: rtbl_data
+
+# Debug IP
+- name: Get my IP Address
+  uri: 
+    url: http://ifconfig.me/ip
+    return_content: yes
+  register: my_public_ip
+
+# Create Security group
+- name: Provision the security group
+  ec2_group:
+    name: "{{ AWS_PREFIX }}_SECGRP"
+    description: Security group for todoapp service
+    vpc_id: "{{ vpc_data.vpc.id }}"
+    region: us-west-2
+    tags:
+      Name: "{{ AWS_PREFIX }}_SECGRP"
+    rules:
+      - proto: tcp
+        ports:
+          - 80
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow all on port 80
+      - proto: tcp
+        ports:
+          - 22
+        cidr_ip: "{{ my_public_ip.content }}/32"
+        rule_desc: allow only my ip with ssh
+  register: secgrp_data
+
+# Create EC2
+- name: Provision the EC2 instance
+  ec2:
+    assign_public_ip: yes
+    image: ami-0157b1e4eefd91fd7
+    instance_type: t2.micro
+    group: "{{ AWS_PREFIX }}_SECGRP"
+    region: us-west-2
+    vpc_subnet_id: "{{ subnet_data.subnet.id }}"
+    key_name: ACIT4640_MAINKEY
+    instance_tags:
+      Name: "{{ AWS_PREFIX }}_VM"
+    exact_count: 1
+    wait: yes
+    count_tag:
+      Name: "{{ AWS_PREFIX }}_VM"
+  register: ec2_data
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+# Get Ec2s
+- name: Register
+  ec2_instance_info:
+    region: us-west-2
+    instance_ids:
+      - "{{ ec2_data.tagged_instances[0].id }}"
+  register: ec2_info
+
+- name: Debug find EC2 IP
+  debug:
+    msg: "{{ ec2_info.instances[0].public_ip_address }}"
+
+# Ensure Ec2 is started up
+- name: Wait for the virtual machine to be up (SSH)
+  wait_for:
+    state: started
+    sleep: 5
+    timeout: 1000
+    port: 22
+    host: "{{ ec2_info.instances[0].public_ip_address }}"
+  delegate_to: localhost
+- name: Refresh ansible inventory
+  meta: refresh_inventory

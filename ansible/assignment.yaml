@@ -1,0 +1,106 @@
+---
+# AWS Setup
+- hosts: localhost
+
+  vars:
+    AWS_PREFIX: ACIT4640
+
+  tasks:
+  - import_tasks: aws_tasks.yaml
+    tags:
+      - aws
+      - provision
+      - never
+
+# AWS Todoapp Setup
+- hosts: aws_ec2
+
+  vars:
+    frontend_user: centos
+    backend_user: node_backend_app
+    frontend_app_path: "/home/{{ frontend_user }}/frontend"
+    backend_app_path: "/home/{{ backend_user }}/backend"
+    backend_db_user: node_app
+    backend_db_password: password
+    backend_db_name: assignment_db
+    backend_db_host: localhost
+
+  tasks:
+  - import_tasks: app_provisioning.yaml
+    tags:
+      - application
+      - provision
+      - never
+
+# Vangrant Nginx Setup
+- hosts: TODO_HTTP_4640
+
+  vars:
+    nginx_file: vagrantnginx.conf
+    frontend_user: admin
+    frontend_app_path: "/home/{{ frontend_user }}/frontend"
+
+  tasks:
+  - import_tasks: nginx.yaml
+    tags:
+      - application
+      - provision
+      
+# Vangrant MySQL Setup
+- hosts: TODO_DB_4640
+
+  vars:
+    backend_db_user: node_app
+    backend_db_password: password
+    backend_db_name: assignment_db
+    backend_db_host: localhost
+
+  tasks:
+  - import_tasks: mysql.yaml
+    tags:
+      - application
+      - provision
+
+# Vangrant Nodejs App Setup
+- hosts: TODO_APP_4640
+
+  vars:
+    frontend_user: admin
+    backend_user: node_backend_app
+    frontend_app_path: "/home/{{ frontend_user }}/frontend"
+    backend_app_path: "/home/{{ backend_user }}/backend"
+    backend_db_user: node_app
+    backend_db_password: password
+    backend_db_name: assignment_db
+    backend_db_host: 192.168.150.30
+
+  tasks:
+  - import_tasks: nodejs.yaml
+    tags:
+      - application
+      - provision
+
+# Clean
+- hosts: localhost
+
+  vars:
+    AWS_PREFIX: ACIT4640
+
+  tasks:
+  - import_tasks: clean_tasks.yaml
+    tags:
+      - clean
+      - never
+
+# Info
+- hosts: localhost
+
+  vars:
+    AWS_PREFIX: ACIT4640
+
+  tasks:
+  - import_tasks: info_tasks.yaml
+    tags:
+      - info
+      - provision
+      - always

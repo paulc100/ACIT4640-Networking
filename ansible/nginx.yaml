@@ -1,0 +1,125 @@
+---
+
+# Nodejs
+- name: Provision the nodejs repository
+  become: yes
+  get_url:
+    url: https://rpm.nodesource.com/setup_14.x
+    dest: /tmp/install_node_repo.sh
+  register: download_nodejs_repo
+- name: Setup NodeJS repo
+  when: download_nodejs_repo.changed
+  become: yes
+  shell: bash /tmp/install_node_repo.sh
+  
+# Install packages
+- name: Install nginx
+  become: yes
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - nginx
+    - firewalld
+    - git
+    - nodejs
+
+# Firewall and Selinux Setup
+- name: Enable/start firewall
+  become: yes
+  shell: |
+    systemctl enable firewalld
+    systemctl start firewalld
+
+- name: SELinux disable
+  become: yes
+  shell: |
+    setenforce 0
+    sed -r -i 's/SELINUX=(enforcing|disabled)/SELINUX=permissive/' /etc/selinux/config
+
+# Provision nginx config
+- name: Provision nginx.conf
+  become: yes
+  copy:
+    src: "./files/{{ nginx_file }}"
+    dest: /etc/nginx/nginx.conf
+
+# Frontend creation and configuration
+- name: Adjust permissions for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  file:
+    path: "/home/{{ frontend_user }}"
+    mode: "0755"
+- name: Make sure the git repo is up to date for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  git:
+    repo: https://github.com/bezkoder/react-crud-web-api
+    dest: "{{ frontend_app_path }}"
+    force: yes
+
+# Modify DB
+- name: Make sure the db settings are correct in app
+  become: yes
+  become_user: "{{ frontend_user }}"
+  replace:
+    path: "{{ frontend_app_path }}/src/http-common.js"
+    regexp: "http://localhost:8080/api"
+    replace: "/api"
+
+# NPM install and build
+- name: Make sure npm install is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm install
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+- name: Make sure npm build is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm run-script build
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+- name: Adjust permissions for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  file:
+    path: "{{ frontend_app_path }}/build"
+    recurse: yes
+    mode: "0755"
+
+# Final setup
+- name: Make sure nginx is running and enabled
+  become: yes
+  systemd:
+    name: nginx
+    enabled: yes
+    state: restarted
+
+# Open ports
+- name: Make sure ports are open
+  become: yes
+  firewalld:
+    port: 8080/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes
+
+- name: Make sure ports are open
+  become: yes
+  firewalld:
+    port: 8081/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes
+
+- name: Make sure nginx port is open
+  become: yes
+  firewalld:
+    port: 80/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes

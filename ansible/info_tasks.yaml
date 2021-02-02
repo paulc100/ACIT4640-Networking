@@ -1,0 +1,36 @@
+---
+
+# Get EC2s
+- name: Register
+  ec2_instance_info:
+    region: us-west-2
+    filters:
+      "tag:Name": "{{ AWS_PREFIX }}_VM"
+      instance-state-name: [ "running" ]
+  register: ec2_info
+  
+# Display IP
+- name: Public IP; skipped if none
+  debug:
+    msg: "{{ ec2_info.instances[0].public_ip_address }}"
+  when: ec2_info.instances != []
+
+# If app not provisioned
+- name: Display app status; skipped if down
+  debug:
+    msg: "Application is not provisioned"
+  when: ec2_info.instances == []
+
+# Check if app is provisioned
+- name: Application Status Check; Errors if no app exists yet
+  uri:
+    url: "http://{{ ec2_info.instances[0].public_ip_address }}"
+  when: ec2_info.instances != [] and ec2_info.instances[0].public_ip_address is defined
+  register: status
+
+# Display status if up
+- name: Display app status; skipped if down
+  debug:
+    msg: "Application is provisioned. Status: {{ status.status }}"
+  when: status.status is defined
+  

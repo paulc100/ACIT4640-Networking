@@ -1,0 +1,150 @@
+---
+
+# Nodejs
+- name: Provision the nodejs repository
+  become: yes
+  get_url:
+    url: https://rpm.nodesource.com/setup_14.x
+    dest: /tmp/install_node_repo.sh
+  register: download_nodejs_repo
+- name: Setup NodeJS repo
+  when: download_nodejs_repo.changed
+  become: yes
+  shell: bash /tmp/install_node_repo.sh
+
+- name: Install git and nodejs
+  become: yes
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - git
+    - nodejs
+    - firewalld
+
+# Firewall and Selinux Setup
+- name: Enable/start firewall
+  become: yes
+  shell: |
+    systemctl enable firewalld
+    systemctl start firewalld
+
+- name: SELinux disable
+  become: yes
+  shell: |
+    setenforce 0
+    sed -r -i 's/SELINUX=(enforcing|disabled)/SELINUX=permissive/' /etc/selinux/config
+
+# Frontend creation and configuration
+- name: Adjust permissions for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  file:
+    path: "/home/{{ frontend_user }}"
+    mode: "0755"
+- name: Make sure the git repo is up to date for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  git:
+    repo: https://github.com/bezkoder/react-crud-web-api
+    dest: "{{ frontend_app_path }}"
+    force: yes
+
+- name: Make sure the db settings are correct in app
+  become: yes
+  become_user: "{{ frontend_user }}"
+  replace:
+    path: "{{ frontend_app_path }}/src/http-common.js"
+    regexp: "http://localhost:8080/api"
+    replace: "/api"
+
+- name: Make sure npm install is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm install
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+- name: Make sure npm build is run for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  shell: npm run-script build
+  args:
+    chdir: "{{ frontend_app_path }}"
+
+- name: Adjust permissions for frontend
+  become: yes
+  become_user: "{{ frontend_user }}"
+  file:
+    path: "{{ frontend_app_path }}/build"
+    recurse: yes
+    mode: "0755"
+    
+# Create backend user
+- name: Make sure user exists
+  become: yes
+  user:
+    name: "{{ backend_user }}"
+
+# Backend creation and configuration
+- name: Adjust permissions for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  file:
+    path: "/home/{{ backend_user }}"
+    mode: "0755"
+- name: Make sure the git repo is up to date for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  git:
+    repo: https://github.com/bezkoder/nodejs-express-sequelize-mysql
+    dest: "{{ backend_app_path }}"
+    force: yes
+
+- name: Make sure npm install is run for backend
+  become: yes
+  become_user: "{{ backend_user }}"
+  shell: |
+    npm install
+  args:
+    chdir: "{{ backend_app_path }}"
+
+- name: Template out the app DB file
+  become: yes
+  become_user: "{{ backend_user }}"
+  template:
+    src: ./templates/db.config.j2
+    dest: "{{ backend_app_path }}/app/config/db.config.js"
+
+# Finalize application
+
+- name: Template out the backend service file
+  become: yes
+  template:
+    force: yes
+    src: ./templates/backend.j2
+    dest: /etc/systemd/system/backend.service
+
+# Start service
+- name: Make sure backend service is enabled and started
+  become: yes
+  systemd:
+    name: backend.service
+    state: restarted
+    enabled: yes
+
+- name: Make sure ports are open
+  become: yes
+  firewalld:
+    port: 8080/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes
+
+- name: Make sure ports are open
+  become: yes
+  firewalld:
+    port: 8081/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes

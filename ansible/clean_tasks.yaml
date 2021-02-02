@@ -1,0 +1,130 @@
+---
+
+# Get EC2 info
+- name: Register ec2
+  ec2_instance_info:
+    region: us-west-2
+    filters:
+      instance-state-name: [ "running" ]
+  register: ec2_info
+
+# Delete EC2
+- name: Terminate instances that were previously launched
+  ec2:
+    region: us-west-2
+    state: absent
+    instance_ids: "{{ ec2_info.instances[0].instance_id }}"
+  when: ec2_info.instances != []
+
+# Wait for EC2 to be down
+- name: Wait for the virtual machine to be down (SSH)
+  wait_for:
+    state: absent
+    sleep: 5
+    timeout: 1000
+    port: 22
+    host: "{{ ec2_info.instances[0].public_ip_address }}"
+  when: ec2_info.instances != []
+
+# Find VPC info
+- name: Register vpc
+  ec2_vpc_net_info:
+    region: us-west-2
+    filters:
+      "tag:Name": "{{ AWS_PREFIX }}_VPC"
+  register: vpc_info
+
+- name: Pause 30 seconds for dependencies
+  pause:
+    seconds: 30
+
+# Delete security group
+- name: Delete the security group
+  ec2_group:
+    name: "{{ AWS_PREFIX }}_SECGRP"
+    region: us-west-2
+    state: absent
+
+- name: Pause
+  pause:
+    seconds: 2
+
+# Get routing table info
+- name: Register route table
+  ec2_vpc_route_table_info:
+    region: us-west-2
+    filters:
+      "tag:Name": "{{ AWS_PREFIX }}_RTBL"
+  register: rtbl_info
+
+- name: Pause
+  pause:
+    seconds: 2
+
+# Get IGW info
+- name: Register the IGW
+  ec2_vpc_igw_info:
+    region: us-west-2
+    filters:
+      "tag:Name": "{{ AWS_PREFIX }}_IGW"
+  register: igw_info
+
+# Delete VPC IGW
+- name: Delete the Internet gateway
+  ec2_vpc_igw:
+    vpc_id: "{{ vpc_info.vpcs[0].id }}"
+    region: us-west-2
+    state: absent
+  when: igw_info.internet_gateways != []
+
+- name: Pause
+  pause:
+    seconds: 2
+
+# Delete VPC routing table
+- name: Delete the Routing Table
+  ec2_vpc_route_table:
+    state: absent
+    vpc_id: "{{ vpc_info.vpcs[0].id }}"
+    region: us-west-2
+    route_table_id: "{{ rtbl_info.route_tables[0].id }}"
+    lookup: id
+  when: rtbl_info.route_tables != []
+
+# Get vpc subnet info
+- name: Register vpc subnet
+  ec2_vpc_subnet_info:
+    region: us-west-2
+    filters:
+      "tag:Name": "{{ AWS_PREFIX }}_SUBNET"
+  register: subnet_info
+
+- name: Pause
+  pause:
+    seconds: 2
+
+# Delete VPC subnet
+- name: Delete subnet
+  ec2_vpc_subnet:
+    vpc_id: "{{ vpc_info.vpcs[0].id }}"
+    cidr: 10.42.10.0/24
+    region: us-west-2
+    state: absent
+  when: subnet_info.subnets != []
+
+- name: Pause
+  pause:
+    seconds: 2
+
+# Delete VPC
+- name: Delete VPC
+  ec2_vpc_net:
+    region: us-west-2
+    state: absent
+    name: "{{ AWS_PREFIX }}_VPC"
+    cidr_block: 10.42.0.0/16
+  when: vpc_info.vpcs != []
+
+- name: Pause
+  pause:
+    seconds: 5

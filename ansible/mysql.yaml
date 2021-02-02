@@ -1,0 +1,51 @@
+---
+
+# mysql
+- name: Install mysql
+  become: yes
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - firewalld
+    - mysql-server
+    
+# Firewall and Selinux Setup
+- name: Enable/start firewall
+  become: yes
+  shell: |
+    systemctl enable firewalld
+    systemctl start firewalld
+
+- name: SELinux disable
+  become: yes
+  shell: |
+    setenforce 0
+    sed -r -i 's/SELINUX=(enforcing|disabled)/SELINUX=permissive/' /etc/selinux/config
+
+# Listen everywhere for DB
+- name: line insert
+  become: yes
+  lineinfile:
+    path: /etc/my.cnf.d/mysql-server.cnf
+    line: 'bind-address=0.0.0.0'
+    insertbefore: last
+
+# DB
+- name: mysql
+  become: yes
+  shell: |
+    systemctl enable mysqld
+    systemctl restart mysqld
+    mysql -u root -e "CREATE DATABASE {{ backend_db_name }};"
+    mysql -u root -e "CREATE USER '{{ backend_db_user }}'@'%' IDENTIFIED BY '{{ backend_db_password }}';"
+    mysql -u root -e "GRANT ALL PRIVILEGES ON {{ backend_db_name }}.* TO '{{ backend_db_user }}'@'%';"
+    mysql -u root -e "FLUSH PRIVILEGES;"
+
+- name: Make sure mysql port is open
+  become: yes
+  firewalld:
+    port: 3306/tcp
+    state: enabled
+    immediate: yes
+    permanent: yes
